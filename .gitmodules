@@ -1,0 +1,6 @@
+[submodule "process-sumstats"]
+	path = process-sumstats
+	url = https://github.com/ce-carey/process-sumstats
+[submodule "ldpred"]
+	path = ldpred
+	url = https://github.com/ce-carey/ldpred
