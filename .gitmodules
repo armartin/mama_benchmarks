@@ -1,6 +1,0 @@
-[submodule "process-sumstats"]
-	path = process-sumstats
-	url = /home/unix/ccarey/process-sumstats
-[submodule "ldpred"]
-	path = ldpred
-	url = /home/unix/ccarey/ldpred
