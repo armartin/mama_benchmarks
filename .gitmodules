@@ -4,3 +4,6 @@
 [submodule "ldpred"]
 	path = ldpred
 	url = https://github.com/ce-carey/ldpred
+[submodule "prs_scoring"]
+	path = prs_scoring
+	url = https://gist.github.com/ce-carey/99e9911b12a352179fb947bef1606307
