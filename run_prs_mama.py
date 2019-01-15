@@ -52,9 +52,15 @@ def main(args):
               'rbc', 'mch', 'mcv', 'mchc', 'hb', 'ht', 'plt']
     phenos.sort()
     phenotype = 'ALL17'
-    sumstats_text_file = args.dirname + args.basename + '_ALL17.clumped'
-    prs_loci_table_location = args.dirname + 'keytables/ukb-'+phenotype+'_' + args.basename + '-pt-sumstats-locus-allele-keyed.kt'
-    contig_row_dict_location = args.dirname + 'contig_row_dict-'+phenotype+ '_' + args.basename
+
+    if args.clump_basename is None:
+        sumstats_text_file = args.dirname + basename + '_ALL17.clumped'
+        prs_loci_table_location = args.dirname + 'keytables/ukb-' + phenotype + '_' + args.basename + '-pt-sumstats-locus-allele-keyed.kt'
+        contig_row_dict_location = args.dirname + 'contig_row_dict-' + phenotype + '_' + args.basename
+    else:
+        sumstats_text_file = args.dirname + args.clump_basename + '_ALL17.clumped'
+        prs_loci_table_location = args.dirname + 'keytables/ukb-' + phenotype + '_' + args.basename_out + '-pt-sumstats-locus-allele-keyed.kt'
+        contig_row_dict_location = args.dirname + 'contig_row_dict-' + phenotype + '_' + args.basename_out
 
     contigs = {'0{}'.format(x):str(x) for x in range(1, 10)}
 
@@ -155,10 +161,15 @@ def main(args):
                                     _variants_per_file=contig_row_dict2,
                                     _row_fields=[])
 
-        samples.write(args.dirname + args.basename + '_holdout_gwas_phenos.ht', True)
+        #samples.write(args.dirname + args.basename + '_holdout_gwas_phenos.ht', True)
+        samples = hl.read_table(args.dirname + args.basename + '_holdout_gwas_phenos.ht')
         mt_all = mt_all.annotate_cols(**samples[mt_all.s]) # ok that phenos keyed on userId not s?
 
-        mt_all.repartition(5000, shuffle=False).write(args.dirname + args.basename + '_ALL17.mt', True)
+        #
+        if args.clump_basename is None:
+            mt_all.repartition(5000, shuffle=False).write(args.dirname + args.basename + '_ALL17.mt', True)
+        else:
+            mt_all.repartition(5000, shuffle=False).write(args.dirname + args.basename_out + '_ALL17.mt', True)
 
     mt_all = hl.read_matrix_table(args.dirname + args.basename + '_ALL17.mt')
 
@@ -182,7 +193,10 @@ def main(args):
 
         p_max = {'s1': 5e-8, 's2': 1e-6, 's3': 1e-4, 's4': 1e-3, 's5': 1e-2, 's6': .05, 's7': .1, 's8': .2, 's9': .5, 's10': 1}
 
-        pheno_clump = specific_clumps(args.dirname + pheno + '_' + args.basename + '.clumped')
+        if args.clump_basename is None:
+            pheno_clump = specific_clumps(args.dirname + pheno + '_' + args.basename + '.clumped')
+        else:
+            pheno_clump = specific_clumps(args.dirname + pheno + '_' + args.clump_basename + '.clumped')
 
         mt = mt.filter_rows(pheno_clump.get(mt.locus, False))
         print(mt.count())
@@ -200,11 +214,19 @@ def main(args):
 
         mt = mt.annotate_cols(**annot_expr)
 
-        mt.cols().write(args.dirname + 'UKB_' + pheno + '_' + args.basename + '_PRS.ht', stage_locally=True, overwrite=True)
-        ht = hl.read_table(args.dirname + 'UKB_' + pheno + '_' + args.basename + '_PRS.ht')
+        if args.clump_basename is None:
+            mt.cols().write(args.dirname + 'UKB_' + pheno + '_' + args.basename + '_PRS.ht', stage_locally=True, overwrite=True)
+            ht = hl.read_table(args.dirname + 'UKB_' + pheno + '_' + args.basename + '_PRS.ht')
+        else:
+            mt.cols().write(args.dirname + 'UKB_' + pheno + '_' + args.basename_out + '_PRS.ht', stage_locally=True,
+                            overwrite=True)
+            ht = hl.read_table(args.dirname + 'UKB_' + pheno + '_' + args.basename_out + '_PRS.ht')
         ht_out = ht.drop(*[x for x in list(ht.row) if 'holdout' in x], *[x for x in phenos if pheno not in x])
 
-        output_location = args.dirname + 'UKB_' + pheno + '_' + args.basename + '_PRS.txt.bgz'
+        if args.clump_basename is None:
+            output_location = args.dirname + 'UKB_' + pheno + '_' + args.basename + '_PRS.txt.bgz'
+        else:
+            output_location = args.dirname + 'UKB_' + pheno + '_' + args.basename_out + '_PRS.txt.bgz'
         ht_out.export(output_location)
     end = time.time()
     print("Success! Job was completed in %s" % time.strftime("%H:%M:%S", time.gmtime(end - start)))
@@ -221,6 +243,8 @@ if __name__ == '__main__':
     parser.add_argument('--basename', default='BBJ_holdout_gwas_')  # pheno_31063_holdout_gwas_
     parser.add_argument('--variant_id', default='BBJ_holdout_gwas_')  # pheno_31063_holdout_gwas_
     parser.add_argument('--betas_are_standardized', action='store_true')
+    parser.add_argument('--clump_basename')
+    parser.add_argument('--basename_out')
 
     args = parser.parse_args()
     main(args)
