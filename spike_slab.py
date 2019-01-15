@@ -77,11 +77,12 @@ def main(args):
             subset_pheno = subset_pheno.order_by(subset_pheno.r).add_index('global_idx').key_by('s')
             subset_pheno = subset_pheno.filter(subset_pheno.global_idx < 10000)
             mt = full_mt.annotate_cols(**subset_pheno[full_mt.s])
+            mt = mt.annotate_rows(maf=hl.agg.mean(mt.dosage)/2)
             result_ht = hl.linear_regression_rows(
                 y=[mt[i] for i in betas],
                 x=mt.dosage,
                 covariates=[1] + [mt['PC' + str(i)] for i in range(1, 21)],
-                pass_through=['rsid'])
+                pass_through=['rsid', 'maf'])
 
             subset_pheno.export('gs://armartin/mama/spike_slab/UKB_hm3.chr22.cm.beta.true_PRS.gwas_inds_' + str(i) + '.tsv.gz')
             result_ht.write('gs://armartin/mama/spike_slab/UKB_hm3.chr22.cm.beta.true_PRS.gwas_sumstat_' + str(i) + '.ht', overwrite=True)
@@ -93,7 +94,9 @@ def main(args):
             get_expr = {
                 field + '_' + x: result_ht[field][i] for i, x in enumerate(betas) for field in ['beta', 'standard_error', 'p_value']
             }
-            result_ht.select('rsid', chr=result_ht.locus.contig, pos=result_ht.locus.position, ref=result_ht.alleles[0], alt=result_ht.alleles[1], **get_expr).export('gs://armartin/mama/spike_slab/UKB_hm3.chr22.cm.beta.true_PRS.gwas_sumstat_' + str(i) + '.tsv.gz')
+            result_ht.select(chr=result_ht.locus.contig, pos=result_ht.locus.position, rsid=result_ht.rsid, ref=result_ht.alleles[0],
+                             alt=result_ht.alleles[1], maf=result_ht.maf, n=result_ht.n, **get_expr)\
+                .export('gs://armartin/mama/spike_slab/UKB_hm3.chr22.cm.beta.true_PRS.gwas_sumstat_' + str(i) + '.tsv.gz')
 
 
 if __name__ == '__main__':
