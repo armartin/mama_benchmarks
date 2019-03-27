@@ -54,13 +54,19 @@ def main(args):
     phenotype = 'ALL17'
 
     if args.clump_basename is None:
-        sumstats_text_file = args.dirname + basename + '_ALL17.clumped'
+        clumps = args.dirname + args.basename + '_ALL17.clumped'
         prs_loci_table_location = args.dirname + 'keytables/ukb-' + phenotype + '_' + args.basename + '-pt-sumstats-locus-allele-keyed.kt'
         contig_row_dict_location = args.dirname + 'contig_row_dict-' + phenotype + '_' + args.basename
     else:
-        sumstats_text_file = args.dirname + args.clump_basename + '_ALL17.clumped'
+        clumps = args.dirname + args.clump_basename + '_ALL17.clumped'
         prs_loci_table_location = args.dirname + 'keytables/ukb-' + phenotype + '_' + args.basename_out + '-pt-sumstats-locus-allele-keyed.kt'
         contig_row_dict_location = args.dirname + 'contig_row_dict-' + phenotype + '_' + args.basename_out
+
+        # clumps = args.dirname + end_dir + 'UKB_hm3.chr22.cm.beta.true_PRS.gwas_sumstat_' + args.iter + '_beta' + args.which_beta + '.clumped'
+        # ss_filename = args.dirname + end_dir + 'UKB_hm3.chr22.cm.beta.true_PRS.gwas_sumstat_' + args.iter + '.tsv.gz'
+        # out_base = args.dirname + end_dir + 'UKB_hm3.chr22.cm.beta.true_PRS.gwas_sumstat_' + args.iter + '_beta' + args.which_beta + '_gwas_PRS'
+
+    clump_table_location = clumps.replace('.clumped', '.kt')
 
     contigs = {'0{}'.format(x):str(x) for x in range(1, 10)}
 
@@ -74,44 +80,55 @@ def main(args):
 
     ################################################################################
     ### set up the sumstats table (chr, bp for union SNPs)
-    if (args.generate_prs_loci_table):
-        t = hl.import_table(sumstats_text_file,
-                            delimiter='\s+',
-                            impute=True)
-        t = t.select(locus = hl.locus(hl.str(t.CHR), t.BP))
-        t = t.key_by('locus')
-        t.write(prs_loci_table_location, overwrite=True)
+    # if (args.generate_prs_loci_table):
+    #     t = hl.import_table(sumstats_text_file,
+    #                         delimiter='\s+',
+    #                         impute=True)
+    #     t = t.select(locus = hl.locus(hl.str(t.CHR), t.BP))
+    #     t = t.key_by('locus')
+    #     t.write(prs_loci_table_location, overwrite=True)
+    #
+    # ss = hl.read_table(prs_loci_table_location)
 
-    ss = hl.read_table(prs_loci_table_location)
+    if args.read_clumps:
+        clump_file = hl.import_table(clumps,
+                                     delimiter='\s+',
+                                     impute=True)
+        clump_file = clump_file.select(locus=hl.locus(hl.str(clump_file.CHR), clump_file.BP))
+        clump_file = clump_file.key_by('locus')
+        clump_file.write(clump_table_location, overwrite=True)
 
-    ################################################################################
-    ### determine the indices of the prs variants in bgen
-    if (args.generate_contig_row_dict):
-        mt = hl.methods.import_bgen(bgen_files,
-                                    [],
-                                    contig_recoding=contigs,
-                                    _row_fields=['file_row_idx'])
-        prs_rows = mt.filter_rows(hl.is_defined(ss[mt.locus])).rows()
-        print('about to collect')
-        # remove all unnecessary data, dropping keys and other irrelevant fields
-        prs_rows = prs_rows.key_by()
-        prs_rows = prs_rows.select(contig=prs_rows.locus.contig,
-                                   file_row_idx=prs_rows.file_row_idx)
-        contig_row_list = prs_rows.collect()
-        print('finished collecting')
-        contig_reformed = [(x['contig'], x['file_row_idx']) for x in contig_row_list]
-        print('reformed')
-        from collections import defaultdict
-        contig_row_dict = defaultdict(list)
-        for k, v in contig_reformed:
-            contig_row_dict[k].append(v)
-        print('dictionary created')
+    clump_file = hl.read_table(clump_table_location)
 
-        with hl.hadoop_open(contig_row_dict_location, 'wb') as f:
-            pickle.dump(contig_row_dict, f)
-    else:
-        with hl.hadoop_open(contig_row_dict_location, 'rb') as f:
-            contig_row_dict = pickle.load(f)
+
+    # ################################################################################
+    # ### determine the indices of the prs variants in bgen
+    # if (args.generate_contig_row_dict):
+    #     mt = hl.methods.import_bgen(bgen_files,
+    #                                 [],
+    #                                 contig_recoding=contigs,
+    #                                 _row_fields=['file_row_idx'])
+    #     prs_rows = mt.filter_rows(hl.is_defined(ss[mt.locus])).rows()
+    #     print('about to collect')
+    #     # remove all unnecessary data, dropping keys and other irrelevant fields
+    #     prs_rows = prs_rows.key_by()
+    #     prs_rows = prs_rows.select(contig=prs_rows.locus.contig,
+    #                                file_row_idx=prs_rows.file_row_idx)
+    #     contig_row_list = prs_rows.collect()
+    #     print('finished collecting')
+    #     contig_reformed = [(x['contig'], x['file_row_idx']) for x in contig_row_list]
+    #     print('reformed')
+    #     from collections import defaultdict
+    #     contig_row_dict = defaultdict(list)
+    #     for k, v in contig_reformed:
+    #         contig_row_dict[k].append(v)
+    #     print('dictionary created')
+    #
+    #     with hl.hadoop_open(contig_row_dict_location, 'wb') as f:
+    #         pickle.dump(contig_row_dict, f)
+    # else:
+    #     with hl.hadoop_open(contig_row_dict_location, 'rb') as f:
+    #         contig_row_dict = pickle.load(f)
 
     ################################################################################
     ### Get true phenotypes from UKBB
@@ -153,13 +170,17 @@ def main(args):
     ################################################################################
     ### Run the PRS using phenotype-specific clump variants
     if args.write_bgen:
-        contig_row_dict2 = {'gs://fc-7d5088b4-7673-45b5-95c2-17ae00a04183/imputed/ukb_imp_chr{contig}_v3.bgen'.format(contig=k): v for k, v in contig_row_dict.items()}
-        mt_all = hl.methods.import_bgen(bgen_files,
-                                    ['dosage'],
-                                    sample_file='gs://phenotype_31063/ukb31063.autosomes.sample',
-                                    contig_recoding=contigs,
-                                    _variants_per_file=contig_row_dict2,
-                                    _row_fields=[])
+        mt_all = hl.import_bgen(bgen_files,
+                                ['dosage'],
+                                sample_file='gs://phenotype_31063/ukb31063.autosomes.sample',
+                                variants=clump_file.locus)
+        # contig_row_dict2 = {'gs://fc-7d5088b4-7673-45b5-95c2-17ae00a04183/imputed/ukb_imp_chr{contig}_v3.bgen'.format(contig=k): v for k, v in contig_row_dict.items()}
+        # mt_all = hl.methods.import_bgen(bgen_files,
+        #                             ['dosage'],
+        #                             sample_file='gs://phenotype_31063/ukb31063.autosomes.sample',
+        #                             contig_recoding=contigs,
+        #                             _variants_per_file=contig_row_dict2,
+        #                             _row_fields=[])
 
         #samples.write(args.dirname + args.basename + '_holdout_gwas_phenos.ht', True)
         samples = hl.read_table(args.dirname + args.basename + '_holdout_gwas_phenos.ht')
@@ -234,8 +255,8 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--overwrite', action='store_true')
-    parser.add_argument('--generate_prs_loci_table', action='store_true')
-    parser.add_argument('--generate_contig_row_dict', action='store_true')
+    parser.add_argument('--read_clumps', action='store_true')
+    #parser.add_argument('--generate_contig_row_dict', action='store_true')
     parser.add_argument('--pheno_table', action='store_true')
     parser.add_argument('--ss_tables', action='store_true')
     parser.add_argument('--write_bgen', action='store_true')
